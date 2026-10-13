@@ -1,0 +1,9 @@
+{
+  "name": "Crewline",
+  "short_name": "Crewline",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#101a2d",
+  "description": "Simple scheduling, staffing, availability and timesheets."
+}
