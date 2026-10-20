@@ -1,0 +1,15 @@
+INSERT INTO organizations (id, name, timezone, default_minimum_call_minutes) VALUES ('org1', 'Northline Events', 'America/Chicago', 240);
+INSERT INTO roles (id, organization_id, name, default_rate_cents, minimum_call_minutes) VALUES
+  ('r1','org1','Audio',3200,240), ('r2','org1','Camera',3000,240), ('r3','org1','Event Lead',3400,240), ('r4','org1','Retail',2800,240), ('r5','org1','Setup',2800,240), ('r6','org1','Volunteer',0,0);
+INSERT INTO people (id, organization_id, first_name, last_name, email, person_type, default_rate_cents) VALUES
+  ('p1','org1','James','Ferrett','james@northline.test','contractor',3200), ('p2','org1','Sarah','Kim','sarah@northline.test','volunteer',2800), ('p3','org1','Mike','Torres','mike@northline.test','contractor',3000), ('p4','org1','Nina','Patel','nina@northline.test','employee',3400), ('p5','org1','Owen','Brooks','owen@northline.test','volunteer',2200);
+INSERT INTO person_roles (person_id, role_id) VALUES ('p1','r1'),('p1','r2'),('p1','r3'),('p2','r4'),('p2','r5'),('p2','r6'),('p3','r2'),('p3','r5'),('p4','r1'),('p4','r3'),('p5','r4'),('p5','r6');
+INSERT INTO events (id, organization_id, name, job_number, date, start_time, end_time, location_name, street_address, instructions, status) VALUES
+  ('e1','org1','Wisconsin Football Event','WF-2408','2026-09-27','15:00','21:00','Camp Randall Stadium','1440 Monroe St, Madison, WI','Check in at Gate 3. Audio load-in is behind the south scoreboard.','confirmed'),
+  ('e2','org1','Harvest Market Setup','HM-0918','2026-09-27','08:00','12:00','Monona Terrace','1 John Nolen Dr, Madison, WI','Use the vendor entrance on the east side.','confirmed'),
+  ('e3','org1','Community Welcome Desk','CW-0929','2026-09-29','09:00','13:00','Five Points Community Center','123 Main St, Madison, WI','Bring a charged tablet for check-in.','pending');
+INSERT INTO event_role_requirements (id,event_id,role_id,positions_required,positions_filled,rate_cents) VALUES ('err1','e1','r1',1,1,3200),('err2','e2','r5',1,1,2800),('err3','e3','r6',1,1,0),('err4','e1','r2',2,1,3000),('err5','e3','r3',1,0,3400);
+INSERT INTO assignments (id,event_id,person_id,role_id,status,hourly_rate_cents,minimum_call_minutes) VALUES ('a1','e1','p1','r1','assigned',3200,240),('a2','e1','p4','r1','assigned',3400,240),('a3','e2','p2','r5','assigned',2800,240),('a4','e3','p5','r6','assigned',0,0);
+INSERT INTO opportunities (id,event_id,role_id,positions_required,positions_filled,estimated_hours,rate_cents) VALUES ('o1','e1','r2',2,1,6,3000),('o2','e3','r3',1,0,4,3400);
+INSERT INTO availability_blocks (id,person_id,start_date,end_date,status) VALUES ('ab1','p1','2026-09-28','2026-09-28','unavailable'),('ab2','p1','2026-10-12','2026-10-15','unavailable'),('ab3','p1','2026-09-30','2026-09-30','tentative');
+INSERT INTO timesheets (id,event_id,person_id,role_id,event_date,scheduled_start,scheduled_end,actual_start,actual_end,break_minutes,actual_hours,approved_hours,hourly_rate_cents,status) VALUES ('t1','e2','p2','r5','2026-09-20','08:00','12:00','08:00','12:00',0,4,4,2800,'approved');

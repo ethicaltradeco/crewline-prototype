@@ -1,11 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "staffing-project",
-  "compatibility_date": "2026-10-06",
+  "name": "crewline-prototype",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-20",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "directory": "dist"
-  }
+    "directory": "dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crewline-prod",
+      "database_id": "d4f84a3d-d693-4e91-865a-f717244dc64b",
+      "migrations_dir": "migrations"
+    }
+  ]
 }
