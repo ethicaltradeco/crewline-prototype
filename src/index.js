@@ -32,6 +32,17 @@ async function currentUser(request, db) {
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > datetime('now')
       AND u.status = 'active' AND om.status = 'active' LIMIT 1`).bind(tokenHash).first();
 }
+async function deliverLoginCode(env, email, code) {
+  if (!env.EMAIL || !env.AUTH_FROM_EMAIL) return false;
+  await env.EMAIL.send({
+    to: email,
+    from: { email: env.AUTH_FROM_EMAIL, name: env.AUTH_FROM_NAME || 'Crewline' },
+    subject: 'Your Crewline sign-in code',
+    text: `Your Crewline verification code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+    html: `<p>Your Crewline verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>It expires in 10 minutes. If you did not request this, you can ignore this email.</p>`
+  });
+  return true;
+}
 async function authApi(request, env, url) {
   if (url.pathname === '/api/auth/request-code' && request.method === 'POST') {
     const payload = await request.json();
@@ -44,6 +55,7 @@ async function authApi(request, env, url) {
         env.DB.prepare("UPDATE auth_codes SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL").bind(user.id),
         env.DB.prepare("INSERT INTO auth_codes (id, user_id, code_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+10 minutes'))").bind(id(), user.id, await hashText(code))
       ]);
+      await deliverLoginCode(env, email, code);
       if (env.AUTH_DEV_MODE === 'true') return json({ ok: true, dev_code: code });
     }
     return json({ ok: true, message: 'If that email belongs to Crewline, a verification code is on its way.' });

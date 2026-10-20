@@ -10,6 +10,9 @@
     "directory": "dist",
     "binding": "ASSETS"
   },
+  "send_email": [
+    { "name": "EMAIL" }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
