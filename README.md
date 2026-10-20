@@ -65,4 +65,13 @@ Harder: production email delivery/retries, calendar subscription semantics, payr
 
 ## Cloudflare direction
 
-For a production pass, add a Worker entrypoint and D1 migration files, keep D1/R2 binding names in `.openai/hosting.json`, and move the functions in `dist/app.js` behind JSON API calls. The UI already separates schedule, opportunities, people, availability, and timesheets so those calls can be added without changing the product model.
+The first backend pass is now included in `src/index.js` and `migrations/`. The Worker exposes `/api/health`, `/api/bootstrap`, `POST /api/opportunities/:id/respond`, `POST /api/availability`, and `POST /api/timesheets`. The UI hydrates from `/api/bootstrap` when the API is available and keeps the local demo fallback for offline walkthroughs.
+
+The D1 database is `crewline-prod`, configured as binding `DB`. Apply future migrations with:
+
+```bash
+npx wrangler d1 migrations apply crewline-prod --remote
+npx wrangler deploy
+```
+
+The current Worker deployment is `crewline-prototype`. Authentication and organization-level authorization are intentionally the next backend layer; the current seeded API is for the prototype workspace only and must not be treated as a secure multi-tenant production app yet.
