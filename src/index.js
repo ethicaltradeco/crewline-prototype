@@ -1,9 +1,78 @@
-const json = (body, status = 200) => new Response(JSON.stringify(body), {
+const json = (body, status = 200, extraHeaders = {}) => new Response(JSON.stringify(body), {
   status,
-  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extraHeaders }
 });
 
 const id = () => crypto.randomUUID();
+const SESSION_COOKIE = 'crewline_session';
+const SESSION_DAYS = 90;
+const bytesToHex = (bytes) => Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+async function hashText(value) { return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))); }
+function randomToken(bytes = 32) {
+  const values = new Uint8Array(bytes);
+  crypto.getRandomValues(values);
+  return btoa(String.fromCharCode(...values)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+function randomCode() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String(values[0] % 1000000).padStart(6, '0');
+}
+function cookieValue(request, name) {
+  const cookieHeader = request.headers.get('cookie') || '';
+  return cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) || null;
+}
+function cookieHeader(token, maxAge = SESSION_DAYS * 86400) { return `${SESSION_COOKIE}=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`; }
+async function currentUser(request, db) {
+  const token = cookieValue(request, SESSION_COOKIE);
+  if (!token) return null;
+  const tokenHash = await hashText(token);
+  return db.prepare(`SELECT u.id, u.email, u.person_id, om.organization_id, om.role
+    FROM sessions s JOIN users u ON u.id = s.user_id JOIN organization_members om ON om.user_id = u.id
+    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > datetime('now')
+      AND u.status = 'active' AND om.status = 'active' LIMIT 1`).bind(tokenHash).first();
+}
+async function authApi(request, env, url) {
+  if (url.pathname === '/api/auth/request-code' && request.method === 'POST') {
+    const payload = await request.json();
+    const email = String(payload.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) return json({ error: 'Enter a valid email address.' }, 400);
+    const user = await env.DB.prepare("SELECT id FROM users WHERE email = ? AND status = 'active'").bind(email).first();
+    if (user) {
+      const code = randomCode();
+      await env.DB.batch([
+        env.DB.prepare("UPDATE auth_codes SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL").bind(user.id),
+        env.DB.prepare("INSERT INTO auth_codes (id, user_id, code_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+10 minutes'))").bind(id(), user.id, await hashText(code))
+      ]);
+      if (env.AUTH_DEV_MODE === 'true') return json({ ok: true, dev_code: code });
+    }
+    return json({ ok: true, message: 'If that email belongs to Crewline, a verification code is on its way.' });
+  }
+  if (url.pathname === '/api/auth/verify-code' && request.method === 'POST') {
+    const payload = await request.json();
+    const email = String(payload.email || '').trim().toLowerCase();
+    const code = String(payload.code || '').trim();
+    const user = await env.DB.prepare("SELECT id FROM users WHERE email = ? AND status = 'active'").bind(email).first();
+    if (!user || !/^\d{6}$/.test(code)) return json({ error: 'Invalid or expired verification code.' }, 401);
+    const authCode = await env.DB.prepare("SELECT id, code_hash FROM auth_codes WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1").bind(user.id).first();
+    if (!authCode || (await hashText(code)) !== authCode.code_hash) return json({ error: 'Invalid or expired verification code.' }, 401);
+    const token = randomToken();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE auth_codes SET used_at = datetime('now') WHERE id = ?").bind(authCode.id),
+      env.DB.prepare("INSERT INTO sessions (id, user_id, token_hash, expires_at, last_seen_at) VALUES (?, ?, ?, datetime('now', '+90 days'), datetime('now'))").bind(id(), user.id, await hashText(token)),
+      env.DB.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").bind(user.id)
+    ]);
+    const sessionUser = await currentUser(new Request(request.url, { headers: { cookie: cookieHeader(token) } }), env.DB);
+    return json({ ok: true, user: sessionUser }, 200, { 'set-cookie': cookieHeader(token) });
+  }
+  if (url.pathname === '/api/auth/me' && request.method === 'GET') return json({ user: await currentUser(request, env.DB) });
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+    const token = cookieValue(request, SESSION_COOKIE);
+    if (token) await env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE token_hash = ?").bind(await hashText(token)).run();
+    return json({ ok: true }, 200, { 'set-cookie': cookieHeader('', 0) });
+  }
+  return null;
+}
 
 async function bootstrap(db) {
   const [org, people, roles, events, opportunities, availability, timesheets] = await Promise.all([
@@ -42,6 +111,7 @@ async function bootstrap(db) {
 async function handleApi(request, env, url) {
   if (!env.DB) return json({ error: 'D1 binding is not configured.' }, 503);
   if (url.pathname === '/api/health') return json({ ok: true, service: 'crewline-api', database: 'd1' });
+  if (url.pathname.startsWith('/api/auth/')) return (await authApi(request, env, url)) || json({ error: 'Not found' }, 404);
   if (url.pathname === '/api/bootstrap' && request.method === 'GET') return json(await bootstrap(env.DB));
 
   const opportunityMatch = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/respond$/);

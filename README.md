@@ -75,3 +75,5 @@ npx wrangler deploy
 ```
 
 The current Worker deployment is `crewline-prototype`. Authentication and organization-level authorization are intentionally the next backend layer; the current seeded API is for the prototype workspace only and must not be treated as a secure multi-tenant production app yet.
+
+Authentication foundation is now present in migration `0003_auth.sql` and `src/index.js`: users, organization memberships, hashed one-time codes, 90-day server-side sessions, logout, and `/api/auth/me`. Set `AUTH_DEV_MODE=true` only in a local environment to receive a test code in the API response. Production email delivery is intentionally not enabled yet; the next step is connecting Cloudflare Email Service or another transactional email provider, then gating data mutations on the authenticated session and organization role.
